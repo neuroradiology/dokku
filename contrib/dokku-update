@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -eo pipefail
+shopt -s nullglob
+
+export DOKKU_ROOT=${DOKKU_ROOT:=~dokku}
+[[ -f $DOKKU_ROOT/dokkurc ]] && source "$DOKKU_ROOT/dokkurc"
+[[ -d $DOKKU_ROOT/.dokkurc ]] && for f in $DOKKU_ROOT/.dokkurc/*; do source "$f"; done
+[[ $DOKKU_TRACE ]] && set -x
+
+export DOKKU_LIB_ROOT=${DOKKU_LIB_PATH:="/var/lib/dokku"}
+export PLUGIN_PATH=${PLUGIN_PATH:="$DOKKU_LIB_ROOT/plugins"}
+export PLUGIN_ENABLED_PATH=${PLUGIN_ENABLED_PATH:="$PLUGIN_PATH/enabled"}
+export DEBIAN_FRONTEND=noninteractive
+
+
+dokku_log_info1() {
+  declare desc="log info1 formatter"
+  echo "-----> $*"
+}
+
+dokku_log_verbose() {
+  declare desc="log verbose formatter"
+  echo "       $*"
+}
+
+dokku_log_warn() {
+  declare desc="log warning formatter"
+  echo " !     $*" 1>&2
+}
+
+dokku-update-plugin() {
+  declare PLUGIN_NAME="$1"
+  if [[ -d "$PLUGIN_ENABLED_PATH/$PLUGIN_NAME/.git" ]]; then
+    dokku_log_verbose "Updating $PLUGIN_NAME"
+    dokku plugin:update "$PLUGIN_NAME"
+  fi
+}
+
+main() {
+  local DOKKU_DISTRO PLUGIN_NAME
+  # shellcheck disable=SC1091
+  DOKKU_DISTRO=$(. /etc/os-release && echo "$ID")
+
+  dokku_log_info1 "Running system updates"
+  case "$DOKKU_DISTRO" in
+    arch)
+      yaourt -Syyua
+      ;;
+    debian|ubuntu)
+      apt-get update -qq > /dev/null
+      apt-get -qq -y --force-yes dist-upgrade
+      ;;
+    centos|opensuse)
+      dokku_log_warn "Updating this operating system is not supported"
+      ;;
+    *)
+      dokku_log_warn "Updating this operating system is not supported"
+      ;;
+  esac
+
+  # update all plugins
+  dokku_log_info1 "Updating all plugins"
+  for  PLUGIN_NAME in $(dokku plugin:list | grep enabled | awk '$1=$1' | cut -d' ' -f1); do
+    dokku-update-plugin "$PLUGIN_NAME"
+  done
+  dokku plugin:install
+
+  # rebuild all applications
+  dokku_log_info1 "Rebuilding all applications"
+  dokku ps:rebuildall
+
+  dokku_log_info1 "Waiting for old containers to stop"
+  sleep 120
+  dokku_log_info1 "Cleaning up"
+  dokku cleanup
+}
+
+main "$@"

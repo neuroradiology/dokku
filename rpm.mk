@@ -6,7 +6,7 @@ SIGIL_RPM_PACKAGE_NAME = gliderlabs-sigil-$(SIGIL_VERSION)-1.$(RPM_ARCHITECTURE)
 
 .PHONY: rpm-all
 
-rpm-all: rpm-setup rpm-herokuish rpm-dokku rpm-plugn rpm-sshcommand rpm-sigil
+rpm-all: rpm-setup rpm-herokuish rpm-dokku rpm-plugn rpm-sshcommand rpm-sigil rpm-dokku-update
 	mv /tmp/*.rpm .
 	@echo "Done"
 
@@ -111,6 +111,17 @@ endif
 		.
 	mv *.rpm "/tmp/dokku-`cat /tmp/build/var/lib/dokku/VERSION`-1.$(RPM_ARCHITECTURE).rpm"
 
+rpm-dokku-update:
+	sudo fpm -t rpm -s dir -n dokku-update \
+			 --version $(DOKKU_UPDATE_VERSION) \
+			 --architecture $(RPM_ARCHITECTURE) \
+			 --package $(DOKKU_UPDATE_PACKAGE_NAME) \
+			 --depends 'dokku' \
+			 --url "https://github.com/$(DOKKU_UPDATE_REPO_NAME)" \
+			 --description $(DOKKU_UPDATE_DESCRIPTION) \
+			 --license 'MIT License' \
+			 contrib/dokku-update=/usr/local/bin
+
 rpm-plugn:
 	rm -rf /tmp/tmp /tmp/build $(PLUGN_RPM_PACKAGE_NAME)
 	mkdir -p /tmp/tmp /tmp/build /tmp/build/usr/bin
@@ -124,14 +135,14 @@ rpm-plugn:
 
 	@echo "-> Creating $(PLUGN_RPM_PACKAGE_NAME)"
 	sudo fpm -t rpm -s dir -C /tmp/build -n plugn \
-		--version $(PLUGN_VERSION) \
-		-a $(RPM_ARCHITECTURE) \
-		--package $(PLUGN_RPM_PACKAGE_NAME) \
-		--url "https://github.com/$(PLUGN_REPO_NAME)" \
-		--category utils \
-		--description "$$PLUGN_DESCRIPTION" \
-		--license 'MIT License' \
-		.
+			 --version $(PLUGN_VERSION) \
+			 --architecture $(RPM_ARCHITECTURE) \
+			 --package $(PLUGN_RPM_PACKAGE_NAME) \
+			 --url "https://github.com/$(PLUGN_REPO_NAME)" \
+			 --category utils \
+			 --description "$$PLUGN_DESCRIPTION" \
+			 --license 'MIT License' \
+			 .
 	mv *.rpm /tmp
 
 rpm-sshcommand:
@@ -148,14 +159,14 @@ rpm-sshcommand:
 
 	@echo "-> Creating $(SSHCOMMAND_RPM_PACKAGE_NAME)"
 	sudo fpm -t rpm -s dir -C /tmp/build -n sshcommand \
-		--version $(SSHCOMMAND_VERSION) \
-		-a $(RPM_ARCHITECTURE) \
-		--package $(SSHCOMMAND_RPM_PACKAGE_NAME) \
-		--url "https://github.com/$(SSHCOMMAND_REPO_NAME)" \
-		--category admin \
-		--description "$$SSHCOMMAND_DESCRIPTION" \
-		--license 'MIT License' \
-		.
+			 --version $(SSHCOMMAND_VERSION) \
+			 -a $(RPM_ARCHITECTURE) \
+			 --package $(SSHCOMMAND_RPM_PACKAGE_NAME) \
+			 --url "https://github.com/$(SSHCOMMAND_REPO_NAME)" \
+			 --category admin \
+			 --description "$$SSHCOMMAND_DESCRIPTION" \
+			 --license 'MIT License' \
+			 .
 	mv *.rpm /tmp
 
 rpm-sigil:

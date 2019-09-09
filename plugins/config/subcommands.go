@@ -25,7 +25,7 @@ func CommandShow(args []string, global bool, shell bool, export bool, merged boo
 		if appName != "" {
 			contextName = appName
 		}
-		common.LogInfo2(contextName + " env vars")
+		common.LogInfo2Quiet(contextName + " env vars")
 		fmt.Println(env.Export(ExportFormatPretty))
 	}
 }
@@ -43,16 +43,28 @@ func CommandGet(args []string, global bool, quoted bool) {
 		os.Exit(1)
 	} else {
 		if quoted {
-			fmt.Printf("'%s'", singleQuoteEscape(value))
+			fmt.Printf("'%s'\n", singleQuoteEscape(value))
 		} else {
-			fmt.Printf("%s", value)
+			fmt.Printf("%s\n", value)
 		}
+	}
+}
+
+//CommandClear implements config:clear
+func CommandClear(args []string, global bool, noRestart bool) {
+	appName, _ := getCommonArgs(global, args)
+	err := UnsetAll(appName, !noRestart)
+	if err != nil {
+		common.LogFail(err.Error())
 	}
 }
 
 //CommandUnset implements config:unset
 func CommandUnset(args []string, global bool, noRestart bool) {
 	appName, keys := getCommonArgs(global, args)
+	if len(keys) == 0 {
+		common.LogFail("At least one key must be given")
+	}
 	err := UnsetMany(appName, keys, !noRestart)
 	if err != nil {
 		common.LogFail(err.Error())
@@ -62,6 +74,9 @@ func CommandUnset(args []string, global bool, noRestart bool) {
 //CommandSet implements config:set
 func CommandSet(args []string, global bool, noRestart bool, encoded bool) {
 	appName, pairs := getCommonArgs(global, args)
+	if len(pairs) == 0 {
+		common.LogFail("At least one env pair must be given")
+	}
 	updated := make(map[string]string)
 	for _, e := range pairs {
 		parts := strings.SplitN(e, "=", 2)
@@ -117,6 +132,10 @@ func CommandExport(args []string, global bool, merged bool, format string) {
 		suffix = " "
 	case "pretty":
 		exportType = ExportFormatPretty
+	case "json":
+		exportType = ExportFormatJSON
+	case "json-list":
+		exportType = ExportFormatJSONList
 	default:
 		common.LogFail(fmt.Sprintf("Unknown export format: %v", format))
 	}

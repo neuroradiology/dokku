@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
 source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
 
 ps_main_cmd() {
@@ -9,8 +10,9 @@ ps_main_cmd() {
 
   [[ -z $2 ]] && dokku_log_fail "Please specify an app to run the command on"
 
-  local APP="$2"; verify_app_name "$APP"
-  ! (is_deployed "$APP") && echo "App $APP has not been deployed" && exit 0
+  local APP="$2"
+  verify_app_name "$APP"
+  ! (is_deployed "$APP") && dokku_log_warn "App $APP has not been deployed" && exit 0
 
   local DOKKU_APP_RUNNING_CONTAINER_IDS=$(get_app_running_container_ids "$APP")
 
@@ -19,7 +21,7 @@ ps_main_cmd() {
     has_tty && local DOKKU_RUN_OPTS="-i -t"
     dokku_log_info1_quiet "running processes in container: $CID"
     # shellcheck disable=SC2086
-    docker exec $DOKKU_RUN_OPTS $CID /bin/sh -c "ps auxwww"
+    "$DOCKER_BIN" exec $DOKKU_RUN_OPTS $CID /bin/sh -c "ps auxwww"
   done
 }
 

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+
+scheduler-docker-local-scheduler-docker-cleanup() {
+  declare desc="scheduler-docker-local scheduler-docker-cleanup plugin trigger"
+  declare trigger="scheduler-docker-local scheduler-docker-cleanup"
+  declare DOKKU_SCHEDULER="$1" APP="$2" FORCE_CLEANUP="$3"
+
+  if [[ "$DOKKU_SCHEDULER" != "docker-local" ]]; then
+    return
+  fi
+
+  if [[ -n "$APP" ]]; then
+    # delete all non-running containers
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rm $("$DOCKER_BIN" ps -a -f "status=exited" -f "label=$DOKKU_CONTAINER_LABEL" -f "label=com.dokku.app-name=$APP" -q) &>/dev/null || true
+
+    # delete all dead containers
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rm $("$DOCKER_BIN" ps -a -f "status=dead" -f "label=$DOKKU_CONTAINER_LABEL" -f "label=com.dokku.app-name=$APP" -q) &>/dev/null || true
+
+    # delete danging images
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rmi $("$DOCKER_BIN" images -f 'dangling=true' -f "label=com.dokku.app-name=$APP" -q) &>/dev/null || true
+
+    # delete unused images
+    "$DOCKER_BIN" image prune --all --filter "label=com.dokku.app-name=$APP" --force &>/dev/null || true
+  else
+    # delete all non-running containers
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rm $("$DOCKER_BIN" ps -a -f "status=exited" -f "label=$DOKKU_CONTAINER_LABEL" -q) &>/dev/null || true
+
+    # delete all dead containers
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rm $("$DOCKER_BIN" ps -a -f "status=dead" -f "label=$DOKKU_CONTAINER_LABEL" -q) &>/dev/null || true
+
+    # delete danging images
+    # shellcheck disable=SC2046
+    "$DOCKER_BIN" rmi $("$DOCKER_BIN" images -f 'dangling=true' -q) &>/dev/null || true
+  fi
+}
+
+scheduler-docker-local-scheduler-docker-cleanup "$@"

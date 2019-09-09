@@ -1,6 +1,9 @@
 /commands
 /subcommands/*
+/triggers/*
 /network-*
 /install
+/post-app-clone-setup
 /post-create
 /post-delete
+/report

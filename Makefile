@@ -1,7 +1,11 @@
 DOKKU_VERSION ?= master
 
-SSHCOMMAND_URL ?= https://raw.githubusercontent.com/dokku/sshcommand/v0.7.0/sshcommand
-PLUGN_URL ?= https://github.com/dokku/plugn/releases/download/v0.3.0/plugn_0.3.0_linux_x86_64.tgz
+PROCFILE_VERSION ?= 0.6.0
+PLUGN_VERSION ?= 0.3.2
+SSHCOMMAND_VERSION ?= 0.8.0
+SSHCOMMAND_URL ?= https://github.com/dokku/sshcommand/releases/download/v${SSHCOMMAND_VERSION}/sshcommand_${SSHCOMMAND_VERSION}_linux_x86_64.tgz
+PROCFILE_UTIL_URL ?= https://github.com/josegonzalez/go-procfile-util/releases/download/v${PROCFILE_VERSION}/procfile-util_${PROCFILE_VERSION}_linux_x86_64.tgz
+PLUGN_URL ?= https://github.com/dokku/plugn/releases/download/v${PLUGN_VERSION}/plugn_${PLUGN_VERSION}_linux_x86_64.tgz
 SIGIL_URL ?= https://github.com/gliderlabs/sigil/releases/download/v0.4.0/sigil_0.4.0_Linux_x86_64.tgz
 STACK_URL ?= https://github.com/gliderlabs/herokuish.git
 PREBUILT_STACK_URL ?= gliderlabs/herokuish:latest
@@ -26,9 +30,10 @@ endif
 
 include common.mk
 
-.PHONY: all apt-update install version copyfiles man-db plugins dependencies sshcommand plugn docker aufs stack count dokku-installer vagrant-acl-add vagrant-dokku go-build
+.PHONY: all apt-update install version copyfiles copyplugin man-db plugins dependencies sshcommand procfile-util plugn docker aufs stack count dokku-installer vagrant-acl-add vagrant-dokku go-build
 
 include tests.mk
+include package.mk
 include deb.mk
 include rpm.mk
 include arch.mk
@@ -38,17 +43,6 @@ all:
 
 install: dependencies version copyfiles plugin-dependencies plugins
 
-release: deb-all rpm-all package_cloud packer
-
-package_cloud:
-	package_cloud push dokku/dokku/ubuntu/trusty herokuish*.deb
-	package_cloud push dokku/dokku/ubuntu/trusty sshcommand*.deb
-	package_cloud push dokku/dokku/ubuntu/trusty plugn*.deb
-	package_cloud push dokku/dokku/ubuntu/trusty dokku*.deb
-	package_cloud push dokku/dokku/el/7 herokuish*.rpm
-	package_cloud push dokku/dokku/el/7 sshcommand*.rpm
-	package_cloud push dokku/dokku/el/7 plugn*.rpm
-	package_cloud push dokku/dokku/el/7 dokku*.rpm
 
 packer:
 	packer build contrib/packer.json
@@ -60,6 +54,15 @@ go-build:
 			$(MAKE) -e -C $$dir $(PLUGIN_MAKE_TARGET) || exit $$? ;\
 		fi ;\
 	done
+
+
+go-build-plugin:
+ifndef PLUGIN_NAME
+	$(error PLUGIN_NAME not specified)
+endif
+	if [ -e plugins/$(PLUGIN_NAME)/Makefile ]; then \
+		$(MAKE) -e -C plugins/$(PLUGIN_NAME) $(PLUGIN_MAKE_TARGET) || exit $$? ;\
+	fi
 
 go-clean:
 	basedir=$(PWD); \
@@ -76,23 +79,28 @@ copyfiles:
 	rm -rf ${CORE_PLUGINS_PATH}/*
 	test -d ${CORE_PLUGINS_PATH}/enabled || PLUGIN_PATH=${CORE_PLUGINS_PATH} plugn init
 	test -d ${PLUGINS_PATH}/enabled || PLUGIN_PATH=${PLUGINS_PATH} plugn init
-	find plugins/ -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | while read plugin; do \
-		rm -Rf ${CORE_PLUGINS_PATH}/available/$$plugin && \
-		rm -Rf ${PLUGINS_PATH}/available/$$plugin && \
-		rm -rf ${CORE_PLUGINS_PATH}/$$plugin && \
-		rm -rf ${PLUGINS_PATH}/$$plugin && \
-		cp -R plugins/$$plugin ${CORE_PLUGINS_PATH}/available && \
-		rm -rf ${CORE_PLUGINS_PATH}/available/$$plugin/src && \
-		ln -s ${CORE_PLUGINS_PATH}/available/$$plugin ${PLUGINS_PATH}/available; \
-		find /var/lib/dokku/ -xtype l -delete;\
-		PLUGIN_PATH=${CORE_PLUGINS_PATH} plugn enable $$plugin ;\
-		PLUGIN_PATH=${PLUGINS_PATH} plugn enable $$plugin ;\
-	done
+	find plugins/ -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | while read plugin; do $(MAKE) copyplugin PLUGIN_NAME=$$plugin; done
 ifndef SKIP_GO_CLEAN
 	$(MAKE) go-clean
 endif
 	chown dokku:dokku -R ${PLUGINS_PATH} ${CORE_PLUGINS_PATH} || true
 	$(MAKE) addman
+
+copyplugin:
+ifndef PLUGIN_NAME
+	$(error PLUGIN_NAME not specified)
+endif
+	rm -Rf ${CORE_PLUGINS_PATH}/available/$(PLUGIN_NAME) && \
+		rm -Rf ${PLUGINS_PATH}/available/$(PLUGIN_NAME) && \
+		rm -rf ${CORE_PLUGINS_PATH}/$(PLUGIN_NAME) && \
+		rm -rf ${PLUGINS_PATH}/$(PLUGIN_NAME) && \
+		cp -R plugins/$(PLUGIN_NAME) ${CORE_PLUGINS_PATH}/available && \
+		rm -rf ${CORE_PLUGINS_PATH}/available/$(PLUGIN_NAME)/src && \
+		ln -s ${CORE_PLUGINS_PATH}/available/$(PLUGIN_NAME) ${PLUGINS_PATH}/available; \
+		find /var/lib/dokku/ -xtype l -delete;\
+		PLUGIN_PATH=${CORE_PLUGINS_PATH} plugn enable $(PLUGIN_NAME) ;\
+		PLUGIN_PATH=${PLUGINS_PATH} plugn enable $(PLUGIN_NAME)
+	chown dokku:dokku -R ${PLUGINS_PATH} ${CORE_PLUGINS_PATH} || true
 
 addman: help2man man-db
 	mkdir -p /usr/local/share/man/man1
@@ -100,23 +108,27 @@ addman: help2man man-db
 	mandb
 
 version:
+	mkdir -p ${DOKKU_LIB_ROOT}
 ifeq ($(DOKKU_VERSION),master)
-	git describe --tags > ~dokku/VERSION  2> /dev/null || echo '~${DOKKU_VERSION} ($(shell date -uIminutes))' > ~dokku/VERSION
+	git describe --tags > ${DOKKU_LIB_ROOT}/VERSION  2>/dev/null || echo '~${DOKKU_VERSION} ($(shell date -uIminutes))' > ${DOKKU_LIB_ROOT}/VERSION
 else
-	echo $(DOKKU_VERSION) > ~dokku/VERSION
+	echo $(DOKKU_VERSION) > ${DOKKU_LIB_ROOT}/STABLE_VERSION
 endif
 
-plugin-dependencies: plugn
+plugin-dependencies: plugn procfile-util
 	sudo -E dokku plugin:install-dependencies --core
 
-plugins: plugn docker
+plugins: plugn procfile-util docker
 	sudo -E dokku plugin:install --core
 
-dependencies: apt-update sshcommand plugn docker help2man man-db sigil
+dependencies: apt-update sshcommand plugn procfile-util docker help2man man-db sigil dos2unix
 	$(MAKE) -e stack
 
 apt-update:
 	apt-get update -qq
+
+dos2unix:
+	apt-get install -qq -y dos2unix
 
 help2man:
 	apt-get install -qq -y help2man
@@ -125,9 +137,13 @@ man-db:
 	apt-get install -qq -y man-db
 
 sshcommand:
-	wget -qO /usr/local/bin/sshcommand ${SSHCOMMAND_URL}
-	chmod +x /usr/local/bin/sshcommand
+	wget -qO /tmp/sshcommand_latest.tgz ${SSHCOMMAND_URL}
+	tar xzf /tmp/sshcommand_latest.tgz -C /usr/local/bin
 	sshcommand create dokku /usr/local/bin/dokku
+
+procfile-util:
+	wget -qO /tmp/procfile-util_latest.tgz ${PROCFILE_UTIL_URL}
+	tar xzf /tmp/procfile-util_latest.tgz -C /usr/local/bin
 
 plugn:
 	wget -qO /tmp/plugn_latest.tgz ${PLUGN_URL}

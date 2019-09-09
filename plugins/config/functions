@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
 source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
 
 config_sub() {
@@ -23,7 +24,6 @@ config_export() {
   return 0
 }
 
-
 config_all() {
   declare desc="Backwards compatible function for plugin use"
   [[ "$1" == "config" ]] || set -- "config" "$@"
@@ -44,6 +44,11 @@ config_keys() {
 config_get() {
   declare desc="get value of given config var"
   config_sub get "$@"
+}
+
+config_clear() {
+  declare desc="clears config vars"
+  config_sub clear "$@"
 }
 
 config_set() {

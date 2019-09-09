@@ -3,15 +3,18 @@
 > New as of 0.5.0, Enhanced in 0.6.0
 
 ```
-proxy:ports <app>                        # List proxy port mappings for app
-proxy:ports-add <app> <scheme>:<host-port>:<container-port> [<scheme>:<host-port>:<container-port>...]           # Set proxy port mappings for app
-proxy:ports-clear <app>                  # Clear all proxy port mappings for app
-proxy:ports-remove <app> <host-port> [<host-port>|<scheme>:<host-port>:<container-port>...]                      # Unset proxy port mappings for app
+proxy:ports <app>                        # List proxy port mappings for an app
+proxy:ports-add <app> <scheme>:<host-port>:<container-port> [<scheme>:<host-port>:<container-port>...]           # Add proxy port mappings to an app
+proxy:ports-clear <app>                  # Clear all proxy port mappings for an app
+proxy:ports-remove <app> <host-port> [<host-port>|<scheme>:<host-port>:<container-port>...]                      # Remove specific proxy port mappings from an app
+proxy:ports-set <app> <scheme>:<host-port>:<container-port> [<scheme>:<host-port>:<container-port>...]           # Set proxy port mappings for an app
 ```
 
 In Dokku 0.5.0, port proxying was decoupled from the `nginx-vhosts` plugin into the proxy plugin. Dokku 0.6.0 introduced the ability to map host ports to specific container ports. In the future this will allow other proxy software - such as HAProxy or Caddy - to be used in place of nginx.
 
 ## Usage
+
+> Warning: Mapping alternative ports may conflict with the active firewall installed on your server or hosting provider. Such software includes - but is not limited to - AWS Security Groups, iptables, and UFW. Please consult the documentation for those softwares as applicable.
 
 ### Proxy port mapping
 
@@ -86,7 +89,22 @@ curl http://node-js-app.dokku.me:8080
 Hello World!
 ```
 
-You can also remove a port mapping that is no longer necessary:
+Port mappings can also be force set using the `proxy:ports-set` command.
+
+```shell
+dokku proxy:ports-set node-js-app http:8080:5000
+```
+
+```
+-----> Setting config vars
+       DOKKU_PROXY_PORT_MAP: http:80:5000 http:8080:5000
+-----> Configuring node-js-app.dokku.me...(using built-in template)
+-----> Creating http nginx.conf
+-----> Running nginx-pre-reload
+       Reloading nginx
+```
+
+A port mapping can be removed using the `proxy:ports-remove` command if it no longer necessary:
 
 ```shell
 dokku proxy:ports-remove node-js-app http:80:5000
@@ -98,7 +116,7 @@ By default, buildpack apps and dockerfile apps **without** explicitly exposed po
 
 ## Port management by Deployment Method
 
-> WARNING: If you set a proxy port map but _do not have a global domain set_, Dokku will reset that map upon first deployment.
+> Warning: If you set a proxy port map but _do not have a global domain set_, Dokku will reset that map upon first deployment.
 
 ### Buildpacks
 
@@ -108,7 +126,7 @@ For buildpack deployments, your application *must* respect the `PORT` environmen
 
 > Changed as of 0.5.0
 
-Dokku's default proxy implementation - nginx - only supports HTTP request proxying. At this time, we do not support proxying plain TCP or UDP ports. UDP ports can be exposed by disabling the nginx proxy with `dokku proxy:disable myapp`. If you would like to investigate alternative proxy methods, please refer to our [proxy management documentation](/docs/advanced-usage/proxy-management.md).
+Dokku's default proxy implementation - nginx - supports HTTP and GRPC request proxying. At this time, we do not support proxying plain TCP or UDP ports. UDP ports can be exposed by disabling the nginx proxy with `dokku proxy:disable myapp`. If you would like to investigate alternative proxy methods, please refer to our [proxy management documentation](/docs/advanced-usage/proxy-management.md).
 
 #### Applications using EXPOSE
 

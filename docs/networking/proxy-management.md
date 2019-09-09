@@ -19,7 +19,7 @@ In Dokku 0.5.0, port proxying was decoupled from the `nginx-vhosts` plugin into 
 
 From Dokku versions `0.5.0` until `0.11.0`, enabling or disabling an application's proxy would **also** control whether or not the application was bound to all interfaces - e.g. `0.0.0.0`. As of `0.11.0`, this is now controlled by the network plugin. Please see the [network documentation](/docs/networking/network.md#container-network-interface-binding) for more information.
 
-### Displaying proxy reports about an app
+### Displaying proxy reports for an app
 
 > New as of 0.8.1
 
@@ -69,7 +69,8 @@ The proxy port scheme is as follows:
 
 - `SCHEME:HOST_PORT:CONTAINER_PORT`
 
-The scheme metadata can be used by proxy implementations in order to properly handle proxying of requests. For example, the built-in `nginx-vhosts` proxy implementation supports both the `http` and `https` schemes.
+The scheme metadata can be used by proxy implementations in order to properly handle proxying of requests. For example, the built-in `nginx-vhosts` proxy implementation supports the `http`, `https`, `grpc` and `grpcs` schemes. 
+For the `grpc` and `grpcs` see [nginx blog post on grpc](https://www.nginx.com/blog/nginx-1-13-10-grpc/).
 
 Developers of proxy implementations are encouraged to use whatever schemes make the most sense, and ignore configurations which they do not support. For instance, a `udp` proxy implementation can safely ignore `http` and `https` port mappings.
 

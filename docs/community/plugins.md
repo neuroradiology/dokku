@@ -44,7 +44,7 @@ The following plugins are available and provided by Dokku maintainers. Where not
 
 ## Community plugins
 
-Note: The following plugins have been supplied by our community and may not have been tested by Dokku maintainers.
+> Warning: The following plugins have been supplied by our community and may not have been tested by Dokku maintainers.
 
 [256dpi]: https://github.com/256dpi
 [abossard]: https://github.com/dudagroup
@@ -57,6 +57,7 @@ Note: The following plugins have been supplied by our community and may not have
 [Aluxian]: https://github.com/Aluxian
 [Aomitayo]: https://github.com/Aomitayo
 [apmorton]: https://github.com/apmorton
+[artofrawr]: https://github.com/artofrawr
 [basgys]: https://github.com/basgys
 [Benjamin-Dobell]: https://github.com/Benjamin-Dobell
 [blag]: https://github.com/blag
@@ -97,6 +98,7 @@ Note: The following plugins have been supplied by our community and may not have
 [michaelshobbs]: https://github.com/michaelshobbs
 [mikecsh]: https://github.com/mikecsh
 [mikexstudios]: https://github.com/mikexstudios
+[mimischi]: https://github.com/mimischi
 [mixxorz]: https://github.com/mixxorz
 [mlebkowski]: https://github.com/mlebkowski
 [motin]: https://github.com/motin
@@ -124,6 +126,9 @@ Note: The following plugins have been supplied by our community and may not have
 [wmluke]: https://github.com/wmluke
 [Zenedith]: https://github.com/Zenedith
 [fteychene]: https://github.com/fteychene
+[sarendsen]: https://github.com/sarendsen
+[baikunz]: https://github.com/baikunz
+[lazyatom]: https://github.com/lazyatom
 
 ### Datastores
 
@@ -163,6 +168,7 @@ Note: The following plugins have been supplied by our community and may not have
 | [FakeSNS](https://github.com/cu12/dokku-fake_sns)                                                 | [cu12][]              | 0.5.0+                |
 | [InfluxDB](https://github.com/basgys/dokku-influxdb)                                              | [basgys][]            | 0.4.x                 |
 | [RethinkDB](https://github.com/stuartpb/dokku-rethinkdb-plugin)                                   | [stuartpb][]          | 0.3.x                 |
+| [Headless Chrome](https://github.com/lazyatom/dokku-chrome)                                       | [lazyatom][]          | 0.8.1+                |
 
 [dccee02]: https://github.com/jeffutter/dokku-riakcs-plugin/commit/dccee02702e7001851917b7814e78a99148fb709
 [c77cbf1]: https://github.com/dokku/dokku/commit/c77cbf1d3ae07f0eafb85082ed7edcae9e836147
@@ -176,9 +182,9 @@ Note: The following plugins have been supplied by our community and may not have
 | [Docker Direct](https://github.com/josegonzalez/dokku-docker-direct)                              | [josegonzalez][]      | 0.4.0+                |
 | [Dokku Clone](https://github.com/crisward/dokku-clone)                                            | [crisward][]          | 0.4.0+                |
 | [Dokku Copy App Config Files](https://github.com/josegonzalez/dokku-supply-config)                | [josegonzalez][]      | 0.4.0+                |
+| [Dockerfile custom path](https://github.com/mimischi/dokku-dockerfile)                            | [mimischi][]          | 0.8.0+                |
 | [Dokku Registry](https://github.com/agco-adm/dokku-registry)<sup>1</sup>                          | [agco-adm][]          | 0.4.0+                |
 | [Dokku Require](https://github.com/crisward/dokku-require)<sup>2</sup>                            | [crisward][]          | 0.4.0+                |
-| [git rev-parse HEAD in env](https://github.com/dokku-community/dokku-git-rev)                     | [cjblomqvist][]       | 0.4.0+                |
 | [Global Certificates](https://github.com/josegonzalez/dokku-global-cert)                          | [josegonzalez][]      | 0.5.0+                |
 | [Graduate (Environment Management)](https://github.com/glassechidna/dokku-graduate)               | [Benjamin-Dobell][]   | 0.4.0+                |
 | [Haproxy tcp load balancer](https://github.com/256dpi/dokku-haproxy)                              | [256dpi][]            | 0.4.0+                |
@@ -192,6 +198,7 @@ Note: The following plugins have been supplied by our community and may not have
 | [SSH Deployment Keys](https://github.com/cedricziel/dokku-deployment-keys)<sup>3</sup>            | [cedricziel][]        | 0.4.0+                |
 | [SSH Hostkeys](https://github.com/cedricziel/dokku-hostkeys-plugin)<sup>4</sup>                   | [cedricziel][]        | 0.3.x                 |
 | [Application build hook](https://github.com/fteychene/dokku-build-hook)                           | [fteychene][]         | 0.4.0+                 |
+| [Post Deploy Script](https://github.com/baikunz/dokku-post-deploy-script)                         | [baikunz][]           | 0.4.0+                 |
 
 [217d00a]: https://github.com/dokku/dokku/commit/217d00a1bc47a7e24d8847617bb08a1633025fc7
 
@@ -217,11 +224,13 @@ Note: The following plugins have been supplied by our community and may not have
 | [Chef cookbook](https://github.com/nickcharlton/dokku-cookbook)                                   | [nickcharlton][]      |                       |
 | [Docker auto persist volumes](https://github.com/Flink/dokku-docker-auto-volumes)                 | [Flink][]             | 0.4.0+                |
 | [Hostname](https://github.com/michaelshobbs/dokku-hostname)                                       | [michaelshobbs][]     | 0.4.0+                |
+| [Limit (Resource management)](https://github.com/sarendsen/dokku-limit)                           | [sarendsen][]         | 0.9.0+                |
 | [Logspout](https://github.com/michaelshobbs/dokku-logspout)                                       | [michaelshobbs][]     | 0.4.0+                |
 | [Syslog](https://github.com/michaelshobbs/dokku-syslog)                                           | [michaelshobbs][]     | 0.10.4+               |
 | [Long Timeout](https://github.com/investtools/dokku-long-timeout-plugin)                          | [investtools][]       | 0.4.0+                |
 | [Monit](https://github.com/cjblomqvist/dokku-monit)                                               | [cjblomqvist][]       | 0.3.x                 |
 | [Monorepo](https://github.com/iamale/dokku-monorepo)                                              | [iamale][]            | 0.4.0+                |
+| [Multi Dockerfile](https://github.com/artofrawr/dokku-multi-dockerfile)                           | [artofrawr][]         | 0.4.0+                |
 | [Node](https://github.com/ademuk/dokku-nodejs)                                                    | [ademuk][]            | 0.3.x                 |
 | [Node](https://github.com/pnegahdar/dokku-node)                                                   | [pnegahdar][]         | 0.3.x                 |
 | [Rollbar](https://github.com/iloveitaly/dokku-rollbar)                                            | [iloveitaly][]        | 0.5.0+                |
@@ -246,6 +255,7 @@ The following plugins have been removed as their functionality is now in Dokku C
 | [Docker Options](https://github.com/dyson/dokku-docker-options)                                   | [dyson][]             | v0.3.17 (docker-options plugin)           |
 | [Dokku Name](https://github.com/alex-sherwin/dokku-name)                                          | [alex-sherwin][]      | v0.4.2 (named containers plugin)          |
 | [Events Logger](https://github.com/alessio/dokku-events)                                          | [alessio][]           | v0.3.21 (events plugin)                   |
+| [git rev-parse HEAD in env](https://github.com/dokku-community/dokku-git-rev)                     | [cjblomqvist][]       | v0.12.0 (enhanced core git plugin)        |
 | [Host Port binding](https://github.com/stuartpb/dokku-bind-port)                                  | [stuartpb][]          | v0.3.17 (docker-options plugin)           |
 | [Link Containers](https://github.com/rlaneve/dokku-link)                                          | [rlaneve][]           | v0.3.17 (docker-options plugin)           |
 | [List Containers](https://github.com/josegonzalez/dokku-list)                                     | [josegonzalez][]      | v0.3.14 (ps plugin)                       |

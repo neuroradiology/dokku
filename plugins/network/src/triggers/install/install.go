@@ -22,11 +22,15 @@ func main() {
 			continue
 		}
 		if proxy.IsAppProxyEnabled(appName) {
-			common.LogVerboseQuiet("Setting %s network property 'bind-all-interfaces' to false")
-			common.PropertyWrite("network", appName, "bind-all-interfaces", "false")
+			common.LogVerboseQuiet("Setting network property 'bind-all-interfaces' to false")
+			if err := common.PropertyWrite("network", appName, "bind-all-interfaces", "false"); err != nil {
+				common.LogWarn(err.Error())
+			}
 		} else {
-			common.LogVerboseQuiet("Setting %s network property 'bind-all-interfaces' to true")
-			common.PropertyWrite("network", appName, "bind-all-interfaces", "true")
+			common.LogVerboseQuiet("Setting network property 'bind-all-interfaces' to true")
+			if err := common.PropertyWrite("network", appName, "bind-all-interfaces", "true"); err != nil {
+				common.LogWarn(err.Error())
+			}
 		}
 	}
 }

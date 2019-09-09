@@ -4,7 +4,10 @@
 .ruby-version
 .idea/
 .vagrant
+build/
 data/
+test-results/
 stack.tgz
 tmp
 coverage.out
+contrib/dokku-update-version

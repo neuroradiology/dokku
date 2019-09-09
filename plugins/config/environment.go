@@ -1,16 +1,15 @@
 package config
 
 import (
+	"archive/tar"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"archive/tar"
-
-	"os"
 
 	"github.com/dokku/dokku/plugins/common"
 	"github.com/joho/godotenv"
@@ -31,6 +30,10 @@ const (
 	ExportFormatShell
 	//ExportFormatPretty format: pretty-printed in columns
 	ExportFormatPretty
+	//ExportFormatJSON format: json key/value output
+	ExportFormatJSON
+	//ExportFormatJSONList format: json output as a list of objects
+	ExportFormatJSONList
 )
 
 //Env is a representation for global or app environment
@@ -168,6 +171,10 @@ func (e *Env) Export(format ExportFormat) string {
 		return e.ShellString()
 	case ExportFormatPretty:
 		return prettyPrintEnvEntries("", e.Map())
+	case ExportFormatJSON:
+		return e.JSONString()
+	case ExportFormatJSONList:
+		return e.JSONListString()
 	default:
 		common.LogFail(fmt.Sprintf("Unknown export format: %v", format))
 		return ""
@@ -188,6 +195,35 @@ func (e *Env) ExportfileString() string {
 //DockerArgsString gets the contents of this Env in the form -env=KEY=VALUE --env...
 func (e *Env) DockerArgsString() string {
 	return e.stringWithPrefixAndSeparator("--env=", " ")
+}
+
+//JSONString returns the contents of this Env as a key/value json object
+func (e *Env) JSONString() string {
+	data, err := json.Marshal(e.Map())
+	if err != nil {
+		return "{}"
+	}
+
+	return string(data)
+}
+
+//JSONListString returns the contents of this Env as a json list of objects containing the name and the value of the env var
+func (e *Env) JSONListString() string {
+	var list []map[string]string
+	for _, key := range e.Keys() {
+		value, _ := e.Get(key)
+		list = append(list, map[string]string{
+			"name":  key,
+			"value": value,
+		})
+	}
+
+	data, err := json.Marshal(list)
+	if err != nil {
+		return "[]"
+	}
+
+	return string(data)
 }
 
 //ShellString gets the contents of this Env in the form "KEY='value' KEY2='value'"
@@ -240,9 +276,17 @@ func prettyPrintEnvEntries(prefix string, entries map[string]string) string {
 	colConfig := columnize.DefaultConfig()
 	colConfig.Prefix = prefix
 	colConfig.Delim = "\x00"
-	lines := make([]string, 0, len(entries))
-	for k, v := range entries {
-		lines = append(lines, fmt.Sprintf("%s:\x00%s", k, v))
+
+	//some keys may be prefixes of each other so we need to sort them rather than the resulting lines
+	keys := make([]string, 0, len(entries))
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		lines = append(lines, fmt.Sprintf("%s:\x00%s", k, entries[k]))
 	}
 	return columnize.Format(lines, colConfig)
 }
@@ -251,6 +295,20 @@ func loadFromFile(name string, filename string) (env *Env, err error) {
 	envMap := make(map[string]string)
 	if _, err := os.Stat(filename); err == nil {
 		envMap, err = godotenv.Read(filename)
+	}
+
+	dirty := false
+	for k := range envMap {
+		if err := validateKey(k); err != nil {
+			common.LogInfo1(fmt.Sprintf("Deleting invalid key %s from config for %s", k, name))
+			delete(envMap, k)
+			dirty = true
+		}
+	}
+	if dirty {
+		if err := godotenv.Write(envMap, filename); err != nil {
+			common.LogFail(fmt.Sprintf("Error writing back config for %s after removing invalid keys", name))
+		}
 	}
 
 	env = &Env{

@@ -3,15 +3,16 @@ include ../../common.mk
 GO_ARGS ?= -a
 
 SUBCOMMANDS = subcommands/gc subcommands/purge-cache
-
+TRIGGERS = triggers/pre-delete
 build-in-docker: clean
 	docker run --rm \
 		-v $$PWD/../..:$(GO_REPO_ROOT) \
 		-w $(GO_REPO_ROOT)/plugins/repo \
 		$(BUILD_IMAGE) \
-		bash -c "GO_ARGS='$(GO_ARGS)' make build" || exit $$?
+		bash -c "GO_ARGS='$(GO_ARGS)' make -j4 build" || exit $$?
 
-build: commands subcommands
+build: commands subcommands triggers
+	$(MAKE) triggers-copy
 
 commands: **/**/commands.go
 	go build $(GO_ARGS) -o commands src/commands/commands.go
@@ -22,7 +23,15 @@ subcommands/%: src/subcommands/*/%.go
 	go build $(GO_ARGS) -o $@ $<
 
 clean:
-	rm -rf commands subcommands
+	rm -rf commands subcommands triggers pre-delete
 
 src-clean:
-	rm -rf .gitignore src triggers vendor Makefile *.go
+	rm -rf .gitignore src triggers vendor Makefile *.go glide.*
+
+triggers: $(TRIGGERS)
+
+triggers/%: src/triggers/*/%.go
+	go build $(GO_ARGS) -o $@ $<
+
+triggers-copy:
+	cp triggers/* .

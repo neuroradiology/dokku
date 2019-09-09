@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
-set -eo pipefail; [[ $DOKKU_TRACE ]] && set -x
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
 source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
 source "$PLUGIN_AVAILABLE_PATH/config/functions"
 
 apps_create() {
   declare desc="verifies app name and creates an app"
-  [[ -z $1 ]] && dokku_log_fail "Please specify an app to run the command on"
-  [[ ! "$1" =~ ^[a-z].* && ! "$1" =~ ^[0-9].* ]] && dokku_log_fail "App name must begin with lowercase alphanumeric character"
-  [[ -d "$DOKKU_ROOT/$1" ]] && dokku_log_fail "Name is already taken"
-  local APP="$1"
+  declare APP="$1"
+  is_valid_app_name "$APP"
+
+  apps_exists "$APP" >/dev/null 2>&1 && dokku_log_fail "Name is already taken"
 
   mkdir -p "$DOKKU_ROOT/$APP"
-  echo "Creating $APP... done"
+  dokku_log_info1_quiet "Creating $APP... done"
   plugn trigger post-create "$APP"
 }
 
 apps_destroy() {
-  local APP="$1"; local IMAGE_TAG=$(get_running_image_tag "$APP")
+  declare desc="destroys an app"
+  declare APP="$1"
   verify_app_name "$APP"
+  local IMAGE_TAG=$(get_running_image_tag "$APP")
 
   if [[ -z "$DOKKU_APPS_FORCE_DELETE" ]]; then
     dokku_log_warn "WARNING: Potentially Destructive Action"
@@ -32,20 +35,35 @@ apps_destroy() {
   fi
 
   echo "Destroying $APP (including all add-ons)"
-
   plugn trigger pre-delete "$APP" "$IMAGE_TAG"
-  local DOKKU_APP_CIDS=$(get_app_container_ids "$APP")
-  local DOKKU_DOCKER_STOP_TIMEOUT="$(config_get "$APP" DOKKU_DOCKER_STOP_TIMEOUT || true)"
-  [[ $DOKKU_DOCKER_STOP_TIMEOUT ]] && DOCKER_STOP_TIME_ARG="--time=${DOKKU_DOCKER_STOP_TIMEOUT}"
 
-  if [[ -n $DOKKU_APP_CIDS ]]; then
-    local cid
-    for cid in $DOKKU_APP_CIDS; do
-      # shellcheck disable=SC2086
-      docker stop $DOCKER_STOP_TIME_ARG "$cid" > /dev/null || true
-      docker rm "$cid"  > /dev/null || true
-    done
-  fi
-
+  local DOKKU_SCHEDULER=$(get_app_scheduler "$APP")
+  local REMOVE_CONTAINERS="true"
+  plugn trigger scheduler-stop "$DOKKU_SCHEDULER" "$APP" "$REMOVE_CONTAINERS"
+  plugn trigger scheduler-post-delete "$DOKKU_SCHEDULER" "$APP" "$IMAGE_TAG"
   plugn trigger post-delete "$APP" "$IMAGE_TAG"
+  docker_cleanup "$APP" "true"
+}
+
+apps_exists() {
+  declare desc="checks if an app exists"
+  declare APP="$1"
+  is_valid_app_name "$APP"
+
+  [[ -d "$DOKKU_ROOT/$APP" ]] || return 1
+}
+
+apps_maybe_create() {
+  declare desc="creates an app dir if allowed"
+  declare APP="$1"
+
+  if ! apps_exists "$APP" >/dev/null 2>&1; then
+    DOKKU_GLOBAL_DISABLE_AUTOCREATE="$(config_get --global DOKKU_DISABLE_APP_AUTOCREATION || true)"
+    if [[ "$DOKKU_GLOBAL_DISABLE_AUTOCREATE" == "true" ]]; then
+      dokku_log_warn "App auto-creation disabled."
+      dokku_log_fail " !     Re-enable app auto-creation or create an app with 'dokku apps:create ${APP}'"
+    else
+      suppress_output apps_create "$APP"
+    fi
+  fi
 }

@@ -6,6 +6,67 @@ Dokku uses nginx as its server for routing requests to specific applications. By
 nginx:access-logs <app> [-t]             # Show the nginx access logs for an application (-t follows)
 nginx:build-config <app>                 # (Re)builds nginx config for given app
 nginx:error-logs <app> [-t]              # Show the nginx error logs for an application (-t follows)
+nginx:validate [<app>] [--clean]         # Validates and optionally cleans up invalid nginx configurations
+```
+
+## Checking access logs
+
+You may check nginx access logs via the `nginx:access-logs` command. This assumes that app access logs are being stored in `/var/log/nginx/$APP-access.log`, as is the default in the generated `nginx.conf`.
+
+```shell
+dokku nginx:access-logs node-js-app
+```
+
+You may also follow the logs by specifying the `-t` flag.
+
+```shell
+dokku nginx:access-logs node-js-app -t
+```
+
+## Checking error logs
+
+You may check nginx error logs via the `nginx:access-logs` command. This assumes that app error logs are being stored in `/var/log/nginx/$APP-error.log`, as is the default in the generated `nginx.conf`.
+
+```shell
+dokku nginx:error-logs node-js-app
+```
+
+You may also follow the logs by specifying the `-t` flag.
+
+```shell
+dokku nginx:error-logs node-js-app -t
+```
+
+## Regenerating nginx config
+
+In certain cases, your app nginx configs may drift from the correct config for your app. You may regenerate the config at any point via the `nginx:build-config` command. This may fail if there are no current web listeners for your app.
+
+```shell
+dokku nginx:build-config node-js-app
+```
+
+## Validating nginx configs
+
+It may be desired to validate an nginx config outside of the deployment process. To do so, run the `nginx:validate` command. With no arguments, this will validate all app nginx configs, one at a time. A minimal wrapper nginx config is generated for each app's nginx config, upon which `nginx -t` will be run.
+
+```shell
+dokku nginx:validate
+```
+
+As app nginx configs are actually executed within a shared context, it is possible for an individual config to be invalid when being validated standalone but _also_ be valid within the global server context. As such, the exit code for the `nginx:validate` command is the exit code of `nginx -t` against the server's real nginx config.
+
+The `nginx:validate` command also takes an optional `--clean` flag. If specified, invalid nginx configs will be removed.
+
+> Warning: Invalid app nginx config's will be removed _even if_ the config is valid in the global server context.
+
+```shell
+dokku nginx:validate --clean
+```
+
+The `--clean` flag may also be specified for a given app:
+
+```shell
+dokku nginx:validate node-js-app --clean
 ```
 
 ## Customizing the nginx configuration
@@ -30,8 +91,8 @@ Dokku uses a templating library by the name of [sigil](https://github.com/glider
 {{ .APP_SSL_PATH }}                 Path to SSL certificate and key
 {{ .DOKKU_ROOT }}                   Global Dokku root directory (ex: app dir would be `{{ .DOKKU_ROOT }}/{{ .APP }}`)
 {{ .DOKKU_APP_LISTENERS }}          List of IP:PORT pairs of app containers
-{{ .NGINX_PORT }}                   Non-SSL nginx listener port (same as `DOKKU_NGINX_PORT` config var)
-{{ .NGINX_SSL_PORT }}               SSL nginx listener port (same as `DOKKU_NGINX_SSL_PORT` config var)
+{{ .PROXY_PORT }}                   Non-SSL nginx listener port (same as `DOKKU_PROXY_PORT` config var)
+{{ .PROXY_SSL_PORT }}               SSL nginx listener port (same as `DOKKU_PROXY_SSL_PORT` config var)
 {{ .NOSSL_SERVER_NAME }}            List of non-SSL VHOSTS
 {{ .PROXY_PORT_MAP }}               List of port mappings (same as `DOKKU_PROXY_PORT_MAP` config var)
 {{ .PROXY_UPSTREAM_PORTS }}         List of configured upstream ports (derived from `DOKKU_PROXY_PORT_MAP` config var)
@@ -42,164 +103,24 @@ Dokku uses a templating library by the name of [sigil](https://github.com/glider
 
 > Note: Application config variables are available for use in custom templates. To do so, use the form of `{{ var "FOO" }}` to access a variable named `FOO`.
 
-### Example Custom Template
-
-Use case: add an `X-Served-By` header to requests
-
-```go
-server {
-  listen      [::]:{{ .NGINX_PORT }};
-  listen      {{ .NGINX_PORT }};
-  server_name {{ .NOSSL_SERVER_NAME }};
-  access_log  /var/log/nginx/{{ .APP }}-access.log;
-  error_log   /var/log/nginx/{{ .APP }}-error.log;
-
-  # set a custom header for requests
-  add_header X-Served-By www-ec2-01;
-
-  gzip on;
-  gzip_min_length  1100;
-  gzip_buffers  4 32k;
-  gzip_types    text/css text/javascript text/xml text/plain text/x-component application/javascript application/x-javascript application/json application/xml  application/rss+xml font/truetype application/x-font-ttf font/opentype application/vnd.ms-fontobject image/svg+xml;
-  gzip_vary on;
-  gzip_comp_level  6;
-
-  location    / {
-    proxy_pass  http://{{ .APP }};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Request-Start $msec;
-  }
-  include {{ .DOKKU_ROOT }}/{{ .APP }}/nginx.conf.d/*.conf;
-}
-
-upstream {{ .APP }} {
-{{ range .DOKKU_APP_LISTENERS | split " " }}
-  server {{ . }};
-{{ end }}
-}
-```
-
-### Example HTTP to HTTPS Custom Template
-Use case: a simple dockerfile app that includes `EXPOSE 80`
-
-```go
-server {
-  listen      [::]:80;
-  listen      80;
-  server_name {{ .NOSSL_SERVER_NAME }};
-
-  access_log  /var/log/nginx/{{ .APP }}-access.log;
-  error_log   /var/log/nginx/{{ .APP }}-error.log;
-
-  return 301 https://$host:443$request_uri;
-}
-server {
-  listen      [::]:{{ $listen_port }} ssl {{ if eq $.HTTP2_SUPPORTED "true" }}http2{{ else if eq $.SPDY_SUPPORTED "true" }}spdy{{ end }};
-  listen      {{ $listen_port }} ssl {{ if eq $.HTTP2_SUPPORTED "true" }}http2{{ else if eq $.SPDY_SUPPORTED "true" }}spdy{{ end }};
-  {{ if .NOSSL_SERVER_NAME }}server_name {{ .NOSSL_SERVER_NAME }}; {{ end }}
-  {{ if .SSL_SERVER_NAME }}server_name {{ .SSL_SERVER_NAME }}; {{ end }}
-
-  access_log  /var/log/nginx/{{ .APP }}-access.log;
-  error_log   /var/log/nginx/{{ .APP }}-error.log;
-
-  ssl_certificate     {{ .APP_SSL_PATH }}/server.crt;
-  ssl_certificate_key {{ .APP_SSL_PATH }}/server.key;
-
-  keepalive_timeout   70;
-  add_header          Alternate-Protocol  443:npn-spdy/2;
-  location    / {
-    proxy_pass  http://{{ .APP }};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Request-Start $msec;
-  }
-  include {{ .DOKKU_ROOT }}/{{ .APP }}/nginx.conf.d/*.conf;
-}
-
-upstream {{ .APP }} {
-{{ range .DOKKU_APP_LISTENERS | split " " }}
-  server {{ . }};
-{{ end }}
-}
-```
-
-### Example using new proxy port mapping
-
-```go
-{{ range $port_map := .PROXY_PORT_MAP | split " " }}
-{{ $port_map_list := $port_map | split ":" }}
-{{ $scheme := index $port_map_list 0 }}
-{{ $listen_port := index $port_map_list 1 }}
-{{ $upstream_port := index $port_map_list 2 }}
-
-server {
-  listen      [::]:{{ $listen_port }};
-  listen      {{ $listen_port }};
-  server_name {{ $.NOSSL_SERVER_NAME }};
-  access_log  /var/log/nginx/{{ $.APP }}-access.log;
-  error_log   /var/log/nginx/{{ $.APP }}-error.log;
-
-  location    / {
-
-    gzip on;
-    gzip_min_length  1100;
-    gzip_buffers  4 32k;
-    gzip_types    text/css text/javascript text/xml text/plain text/x-component application/javascript application/x-javascript application/json application/xml  application/rss+xml font/truetype application/x-font-ttf font/opentype application/vnd.ms-fontobject image/svg+xml;
-    gzip_vary on;
-    gzip_comp_level  6;
-
-    proxy_pass  http://{{ $.APP }}-{{ $upstream_port }};
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $http_host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-For $remote_addr;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Request-Start $msec;
-  }
-  include {{ $.DOKKU_ROOT }}/{{ $.APP }}/nginx.conf.d/*.conf;
-}
-
-{{ range $upstream_port := $.PROXY_UPSTREAM_PORTS | split " " }}
-upstream {{ $.APP }}-{{ $upstream_port }} {
-{{ range $listeners := $.DOKKU_APP_LISTENERS | split " " }}
-{{ $listener_list := $listeners | split ":" }}
-{{ $listener_ip := index $listener_list 0 }}
-  server {{ $listener_ip }}:{{ $upstream_port }};{{ end }}
-}
-{{ end }}
-```
-
 ### Customizing via configuration files included by the default templates
 
 The default nginx.conf template will include everything from your apps `nginx.conf.d/` subdirectory in the main `server {}` block (see above):
 
-```go
+```
 include {{ .DOKKU_ROOT }}/{{ .APP }}/nginx.conf.d/*.conf;
 ```
 
 That means you can put additional configuration in separate files, for example to limit the uploaded body size to 50 megabytes, do
 
 ```shell
-mkdir /home/dokku/myapp/nginx.conf.d/
-echo 'client_max_body_size 50m;' > /home/dokku/myapp/nginx.conf.d/upload.conf
-chown dokku:dokku /home/dokku/myapp/nginx.conf.d/upload.conf
+mkdir /home/dokku/node-js-app/nginx.conf.d/
+echo 'client_max_body_size 50m;' > /home/dokku/node-js-app/nginx.conf.d/upload.conf
+chown dokku:dokku /home/dokku/node-js-app/nginx.conf.d/upload.conf
 service nginx reload
 ```
 
-The example above uses additional configuration files directly on the Dokku host. Unlike the `nginx.conf.sigil` file, these additional files will not be copied over from your application repo, and thus need to be placed in the `/home/dokku/myapp/nginx.conf.d/` directory manually.
+The example above uses additional configuration files directly on the Dokku host. Unlike the `nginx.conf.sigil` file, these additional files will not be copied over from your application repo, and thus need to be placed in the `/home/dokku/node-js-app/nginx.conf.d/` directory manually.
 
 For PHP Buildpack users, you will also need to provide a `Procfile` and an accompanying `nginx.conf` file to customize the nginx config *within* the container. The following are example contents for your `Procfile`
 
@@ -214,6 +135,16 @@ Your `nginx.conf` file - not to be confused with Dokku's `nginx.conf.sigil` - wo
     }
 
 Please adjust the `Procfile` and `nginx.conf` file as appropriate.
+
+## Custom Error Pages
+
+By default, Dokku provides custom error pages for the following three categories of errors:
+
+- 4xx: For all non-404 errors with a 4xx response code.
+- 404: For "404 Not Found" errors.
+- 5xx: For all 5xx error responses
+
+These are provided as an alternative to the generic Nginx error page, are shared for _all_ applications, and their contents are located on disk at `/var/lib/dokku/data/nginx-vhosts/dokku-errors`. To customize them for a specific app, create a custom `nginx.conf.sigil` as described above and change the paths to point elsewhere.
 
 ## Domains plugin
 

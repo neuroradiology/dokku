@@ -80,6 +80,22 @@ func TestConfigSetMany(t *testing.T) {
 	Expect(SetMany(testAppName+"does_not_exist", vals, false)).ToNot(Succeed())
 }
 
+func TestConfigUnsetAll(t *testing.T) {
+	RegisterTestingT(t)
+	Expect(setupTestApp()).To(Succeed())
+	defer teardownTestApp()
+
+	expectValue(testAppName, "testKey", "TESTING")
+	expectValue("", "testKey", "GLOBAL_TESTING")
+
+	Expect(UnsetAll(testAppName, false)).To(Succeed())
+	expectNoValue(testAppName, "testKey")
+	expectNoValue(testAppName, "noKey")
+	expectNoValue(testAppName, "globalKey")
+
+	Expect(UnsetAll(testAppName+"does-not-exist", false)).ToNot(Succeed())
+}
+
 func TestConfigUnsetMany(t *testing.T) {
 	RegisterTestingT(t)
 	Expect(setupTestApp()).To(Succeed())
@@ -138,6 +154,32 @@ func TestInvalidKeys(t *testing.T) {
 		value = GetWithDefault(testAppName, key, "default")
 		Expect(value).To(Equal("default"))
 	}
+}
+
+func TestInvalidEnvOnDisk(t *testing.T) {
+	RegisterTestingT(t)
+	Expect(setupTestApp()).To(Succeed())
+	defer teardownTestApp()
+
+	appConfigFile := strings.Join([]string{testAppDir, "/ENV"}, "")
+	b := []byte("export --invalid-key=TESTING\nexport valid_key=value\n")
+	if err := ioutil.WriteFile(appConfigFile, b, 0644); err != nil {
+		return
+	}
+
+	env, err := LoadAppEnv(testAppName)
+	Expect(err).NotTo(HaveOccurred())
+	_, ok := env.Get("--invalid-key")
+	Expect(ok).To(Equal(false))
+	value, ok := env.Get("valid_key")
+	Expect(ok).To(Equal(true))
+	Expect(value).To(Equal("value"))
+
+	//LoadAppEnv eliminates it from the file
+	content, err := ioutil.ReadFile(appConfigFile)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(strings.Contains(string(content), "--invalid-key")).To(BeFalse())
+
 }
 
 func expectValue(appName string, key string, expected string) {

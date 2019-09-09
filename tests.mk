@@ -1,27 +1,57 @@
 SYSTEM := $(shell sh -c 'uname -s 2>/dev/null')
+DOKKU_SSH_PORT ?= 22
+
+bats:
+ifeq ($(SYSTEM),Darwin)
+ifneq ($(shell bats --version >/dev/null 2>&1 ; echo $$?),0)
+	brew install bats-core
+endif
+else
+	git clone https://github.com/josegonzalez/bats-core.git /tmp/bats
+	cd /tmp/bats && sudo ./install.sh /usr/local
+	rm -rf /tmp/bats
+endif
 
 shellcheck:
-ifneq ($(shell shellcheck --version > /dev/null 2>&1 ; echo $$?),0)
+ifneq ($(shell shellcheck --version >/dev/null 2>&1 ; echo $$?),0)
 ifeq ($(SYSTEM),Darwin)
 	brew install shellcheck
 else
-	sudo apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys 5072E1F5
 	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse'
 	sudo rm -rf /var/lib/apt/lists/* && sudo apt-get clean
 	sudo apt-get update -qq && sudo apt-get install -qq -y shellcheck
 endif
 endif
 
-ci-dependencies: shellcheck bats
+shfmt:
+ifneq ($(shell shfmt --version >/dev/null 2>&1 ; echo $$?),0)
+ifeq ($(shfmt),Darwin)
+	brew install shfmt
+else
+	wget -qO /tmp/shfmt https://github.com/mvdan/sh/releases/download/v2.6.2/shfmt_v2.6.2_linux_amd64
+	chmod +x /tmp/shfmt
+	sudo mv /tmp/shfmt /usr/local/bin/shfmt
+endif
+endif
+
+xmlstarlet:
+ifneq ($(shell xmlstarlet --version >/dev/null 2>&1 ; echo $$?),0)
+ifeq ($(SYSTEM),Darwin)
+	brew install xmlstarlet
+else
+	sudo apt-get update -qq && sudo apt-get install -qq -y xmlstarlet
+endif
+endif
+
+ci-dependencies: bats shellcheck xmlstarlet
 
 setup-deploy-tests:
-	mkdir -p /home/dokku
 ifdef ENABLE_DOKKU_TRACE
-	echo "-----> Enabling tracing"
-	echo "export DOKKU_TRACE=1" >> /home/dokku/dokkurc
+	echo "-----> Enable dokku trace"
+	dokku trace:on
 endif
 	@echo "Setting dokku.me in /etc/hosts"
-	sudo /bin/bash -c "[[ `ping -c1 dokku.me > /dev/null 2>&1; echo $$?` -eq 0 ]] || echo \"127.0.0.1  dokku.me *.dokku.me www.test.app.dokku.me\" >> /etc/hosts"
+	sudo /bin/bash -c "[[ `ping -c1 dokku.me >/dev/null 2>&1; echo $$?` -eq 0 ]] || echo \"127.0.0.1  dokku.me *.dokku.me www.test.app.dokku.me\" >> /etc/hosts"
 
 	@echo "-----> Generating keypair..."
 	mkdir -p /root/.ssh
@@ -30,50 +60,68 @@ endif
 	chmod 600 /root/.ssh/dokku_test_rsa*
 
 	@echo "-----> Setting up ssh config..."
-ifneq ($(shell ls /root/.ssh/config > /dev/null 2>&1 ; echo $$?),0)
-	echo "Host dokku.me \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
+ifneq ($(shell ls /root/.ssh/config >/dev/null 2>&1 ; echo $$?),0)
+	echo "Host dokku.me \\r\\n Port $(DOKKU_SSH_PORT) \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
 	echo "Host 127.0.0.1 \\r\\n Port 22333 \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
 else ifeq ($(shell grep dokku.me /root/.ssh/config),)
-	echo "Host dokku.me \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
+	echo "Host dokku.me \\r\\n Port $(DOKKU_SSH_PORT) \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
 	echo "Host 127.0.0.1 \\r\\n Port 22333 \\r\\n RequestTTY yes \\r\\n IdentityFile /root/.ssh/dokku_test_rsa" >> /root/.ssh/config
+else
+	sed --in-place 's/Port 22 \r/Port $(DOKKU_SSH_PORT) \r/g' /root/.ssh/config
+	cat /root/.ssh/config
 endif
 
 ifneq ($(wildcard /etc/ssh/sshd_config),)
+	sed --in-place "s/^#Port 22$\/Port 22/g" /etc/ssh/sshd_config
 ifeq ($(shell grep 22333 /etc/ssh/sshd_config),)
 	sed --in-place "s:^Port 22:Port 22 \\nPort 22333:g" /etc/ssh/sshd_config
-	restart ssh
 endif
+	service ssh restart
 endif
 
 	@echo "-----> Installing SSH public key..."
 	sudo sshcommand acl-remove dokku test
 	cat /root/.ssh/dokku_test_rsa.pub | sudo sshcommand acl-add dokku test
 
-	@echo "-----> Intitial SSH connection to populate known_hosts..."
-	ssh -o StrictHostKeyChecking=no dokku@dokku.me help > /dev/null
-	ssh -o StrictHostKeyChecking=no dokku@127.0.0.1 help > /dev/null
-
 ifeq ($(shell grep dokku.me /home/dokku/VHOST 2>/dev/null),)
 	@echo "-----> Setting default VHOST to dokku.me..."
 	echo "dokku.me" > /home/dokku/VHOST
 endif
-
-bats:
-ifneq ($(shell bats --version > /dev/null 2>&1 ; echo $$?),0)
-ifeq ($(SYSTEM),Darwin)
-	brew install bats
-else
-	git clone https://github.com/sstephenson/bats.git /tmp/bats
-	cd /tmp/bats && sudo ./install.sh /usr/local
-	rm -rf /tmp/bats
-endif
+ifeq ($(DOKKU_SSH_PORT), 22)
+	$(MAKE) prime-ssh-known-hosts
 endif
 
-lint:
+setup-docker-deploy-tests: setup-deploy-tests
+ifdef ENABLE_DOKKU_TRACE
+	echo "-----> Enable dokku trace"
+	docker exec -ti dokku bash -c "dokku trace:on"
+endif
+	docker exec -ti dokku bash -c "sshcommand acl-remove dokku test"
+	docker exec -ti dokku bash -c "echo `cat /root/.ssh/dokku_test_rsa.pub` | sshcommand acl-add dokku test"
+	$(MAKE) prime-ssh-known-hosts
+
+prime-ssh-known-hosts:
+	@echo "-----> Intitial SSH connection to populate known_hosts..."
+	ssh -o StrictHostKeyChecking=no dokku@dokku.me help >/dev/null
+	ssh -o StrictHostKeyChecking=no dokku@127.0.0.1 help >/dev/null
+
+lint-setup:
+	@mkdir -p test-results/shellcheck tmp/shellcheck
+	@find . -not -path '*/\.*' -not -path './debian/*' -type f | xargs file | grep text | awk -F ':' '{ print $$1 }' | xargs head -n1 | egrep -B1 "bash" | grep "==>" | awk '{ print $$2 }' > tmp/shellcheck/test-files
+	@cat tests/shellcheck-exclude | sed -n -e '/^# SC/p' | cut -d' ' -f2 | paste -d, -s > tmp/shellcheck/exclude
+
+lint-ci: lint-setup
 	# these are disabled due to their expansive existence in the codebase. we should clean it up though
-	# SC2034: VAR appears unused - https://github.com/koalaman/shellcheck/wiki/SC2034
+	@cat tests/shellcheck-exclude | sed -n -e '/^# SC/p'
 	@echo linting...
-	@$(QUIET) find . -not -path '*/\.*' -not -path './debian/*' -type f | xargs file | grep text | awk -F ':' '{ print $$1 }' | xargs head -n1 | egrep -B1 "bash" | grep "==>" | awk '{ print $$2 }' | xargs shellcheck -e SC2034
+	@cat tmp/shellcheck/test-files | xargs shellcheck -e $(shell cat tmp/shellcheck/exclude) | tests/shellcheck-to-junit --output test-results/shellcheck/results.xml --files tmp/shellcheck/test-files --exclude $(shell cat tmp/shellcheck/exclude)
+
+lint-shfmt: shfmt
+	# verifying via shfmt
+	# shfmt -l -bn -ci -i 2 -d .
+	@shfmt -l -bn -ci -i 2 -d .
+
+lint: lint-shfmt lint-ci
 
 ci-go-coverage:
 	docker run --rm -ti \
@@ -210,5 +258,8 @@ deploy-tests:
 test: setup-deploy-tests lint unit-tests deploy-tests
 
 test-ci:
-	@echo "executing tests: $(shell circleci tests glob tests/unit/*.bats | circleci tests split --split-by=timings | xargs)"
-	bats $(shell circleci tests glob tests/unit/*.bats | circleci tests split --split-by=timings | xargs)
+	@mkdir -p test-results/bats
+	@cd tests/unit && echo "executing tests: $(shell cd tests/unit ; circleci tests glob *.bats | circleci tests split --split-by=timings --timings-type=classname | xargs)"
+	cd tests/unit && bats --formatter bats-format-junit -e -T -o ../../test-results/bats $(shell cd tests/unit ; circleci tests glob *.bats | circleci tests split --split-by=timings --timings-type=classname | xargs)
+
+test-ci-docker: setup-docker-deploy-tests deploy-test-checks-root deploy-test-config deploy-test-multi deploy-test-go-fail-predeploy deploy-test-go-fail-postdeploy

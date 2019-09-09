@@ -15,50 +15,56 @@ teardown() {
 
 assert_urls() {
   urls=$@
-  run dokku urls $TEST_APP
-  echo "output: "$output
-  echo "status: "$status
+  run /bin/bash -c "dokku urls $TEST_APP"
+  echo "output: $output"
+  echo "status: $status"
   echo "urls:" $(tr ' ' '\n' <<< "${urls}" | sort)
   assert_output < <(tr ' ' '\n' <<< "${urls}" | sort)
 }
 
 assert_url() {
   url=$1
-  run dokku url $TEST_APP
-  echo "output: "$output
-  echo "status: "$status
+  run /bin/bash -c "dokku url $TEST_APP"
+  echo "output: $output"
+  echo "status: $status"
   echo "url: ${url}"
   assert_output "${url}"
-}
-
-build_nginx_config() {
-  # simulate nginx post-deploy
-  dokku domains:setup $TEST_APP
-  dokku nginx:build-config $TEST_APP
 }
 
 @test "(core) run (with --options)" {
   deploy_app
   run /bin/bash -c "dokku --force --quiet run $TEST_APP node --version"
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+}
+
+@test "(core) run (with --env / -e)" {
+  deploy_app
+  run /bin/bash -c "dokku run --env TEST=testvalue -e TEST2=testvalue2 $TEST_APP env | egrep '^TEST=testvalue'"
+  echo "output: $output"
+  echo "status: $status"
+
+  run /bin/bash -c "dokku run --env TEST=testvalue -e TEST2=testvalue2 $TEST_APP env | egrep '^TEST2=testvalue2'"
+  echo "output: $output"
+  echo "status: $status"
   assert_success
 }
 
 @test "(core) unknown command" {
   run /bin/bash -c "dokku fakecommand"
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
   assert_failure
 
   run /bin/bash -c "dokku fakecommand 2>&1 | grep -q 'is not a dokku command'"
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
   assert_success
 
   run /bin/bash -c "dokku apps: 2>&1 | grep -q 'is not a dokku command'"
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
   assert_success
 }
 
@@ -99,14 +105,14 @@ build_nginx_config() {
 
 @test "(core) git-remote (off-port)" {
   run deploy_app nodejs-express ssh://dokku@127.0.0.1:22333/$TEST_APP
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
   assert_success
 }
 
 @test "(core) git-remote (bad name)" {
   run deploy_app nodejs-express ssh://dokku@127.0.0.1:22333/home/dokku/$TEST_APP
-  echo "output: "$output
-  echo "status: "$status
+  echo "output: $output"
+  echo "status: $status"
   assert_failure
 }

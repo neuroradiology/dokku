@@ -56,7 +56,7 @@ If you decide to obtain a CA signed certificate, you can import that certificate
 
 The `certs:remove` command only works on app-specific certificates. It will `rm` the app-specific tls directory, rebuild the nginx configuration, and reload nginx.
 
-### Displaying certificate reports about an app
+### Displaying certificate reports for an app
 
 > New as of 0.8.1
 
@@ -67,17 +67,17 @@ dokku certs:report
 ```
 
 ```
-=====> node-js-sample
-       Ssl dir:             /home/dokku/node-js-sample/tls
+=====> node-js-app
+       Ssl dir:             /home/dokku/node-js-app/tls
        Ssl enabled:         true
-       Ssl hostnames:       *.node-js-sample.org node-js-sample.org
+       Ssl hostnames:       *.node-js-app.org node-js-app.org
        Ssl expires at:      Oct  5 23:59:59 2019 GMT
        Ssl issuer:          C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO RSA Domain Validation Secure Server CA
        Ssl starts at:       Oct  5 00:00:00 2016 GMT
-       Ssl subject:         OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.node-js-sample.org
+       Ssl subject:         OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.node-js-app.org
        Ssl verified:        self signed.
-=====> python-sample
-       Ssl dir:             /home/dokku/python-sample/tls
+=====> python-app
+       Ssl dir:             /home/dokku/python-app/tls
        Ssl enabled:         false
        Ssl hostnames:
        Ssl expires at:
@@ -90,25 +90,25 @@ dokku certs:report
 You can run the command for a specific app also.
 
 ```shell
-dokku certs:report node-js-sample
+dokku certs:report node-js-app
 ```
 
 ```
-=====> node-js-sample ssl information
-       Ssl dir:             /home/dokku/node-js-sample/tls
+=====> node-js-app ssl information
+       Ssl dir:             /home/dokku/node-js-app/tls
        Ssl enabled:         true
-       Ssl hostnames:       *.example.org example.org
+       Ssl hostnames:       *.dokku.org dokku.org
        Ssl expires at:      Oct  5 23:59:59 2019 GMT
        Ssl issuer:          C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO RSA Domain Validation Secure Server CA
        Ssl starts at:       Oct  5 00:00:00 2016 GMT
-       Ssl subject:         OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.example.org
+       Ssl subject:         OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.dokku.org
        Ssl verified:        self signed.
 ```
 
 You can pass flags which will output only the value of the specific information you want. For example:
 
 ```shell
-dokku certs:report node-js-sample --ssl-enabled
+dokku certs:report node-js-app --ssl-enabled
 ```
 
 ## HSTS Header
@@ -129,8 +129,8 @@ If your server runs behind an HTTP/S load balancer, then Nginx will see all requ
 
 ```go
 server {
-  listen      [::]:{{ .NGINX_PORT }};
-  listen      {{ .NGINX_PORT }};
+  listen      [::]:{{ .PROXY_PORT }};
+  listen      {{ .PROXY_PORT }};
   server_name {{ .NOSSL_SERVER_NAME }};
   access_log  /var/log/nginx/{{ .APP }}-access.log;
   error_log   /var/log/nginx/{{ .APP }}-error.log;
@@ -139,7 +139,7 @@ server {
     proxy_pass  http://{{ .APP }};
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
+    proxy_set_header Connection $http_connection;
     proxy_set_header Host $http_host;
     proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
     proxy_set_header X-Forwarded-For $http_x_forwarded_for;
